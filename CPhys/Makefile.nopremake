@@ -1,0 +1,65 @@
+# Any questions ? > 8-800-200-8002
+
+SPREF := src
+SDIRS := $(addprefix $(SPREF)/, math)
+SDIRS += $(SPREF)
+
+BPREF := bin/release
+BDIRS := $(patsubst $(SPREF)%, $(BPREF)%, $(SDIRS))
+
+SRCHWILDCARDS := $(addsuffix /*.c, $(SDIRS))
+
+SFILES := $(wildcard $(SRCHWILDCARDS))
+OFILES := $(patsubst $(SPREF)%.c, $(BPREF)%.o, $(SFILES))
+
+VPATH := $(SDIRS)
+
+INC :=
+CF := -Wall $(CFLAGS)
+
+override CF += -fopenmp -pipe $(INC)
+
+LF := -L`gcc -print-file-name=` -lgcc -lc -lm -lGL -lGLU -lglut -lpthread -lgomp
+
+all: mkdirs main
+	@echo ":-)"
+
+
+main: $(OFILES)
+	@echo "[LD] $^ => $@"
+#ld /usr/lib/crt1.o /usr/lib/crti.o /usr/lib/crtn.o $^ -o $(BPREF)/$@ $(LF)
+#gcc $(LF) $^ -o $(BPREF)/$@
+	clang $(LF) $^ -o $(BPREF)/$@
+
+$(BPREF)/%.o: $(SPREF)/%.c
+	@echo "[CC] $< -> $@"
+	clang $(CF) -c $< -o $@
+
+
+.PHONY: clean showvars mkdirs rebuild
+
+# check-syntax:
+# 	gcc -o nul -S ${CHK_SOURCES}
+
+clean:
+	@echo cleaning...
+	@echo [RM] $(OFILES)
+	@rm $(OFILES)
+	@echo [RM] $(BPREF)/main
+	@rm $(BPREF)/main
+
+showvars:
+	@echo $(SPREF)
+	@echo $(SDIRS)
+	@echo $(BPREF)
+	@echo $(BDIRS)
+	@echo $(SFILES)
+	@echo $(OFILES)
+	@echo $(VPATH)
+
+mkdirs:
+	@echo [MKDIR] -p $(BDIRS)
+	@mkdir -p $(BDIRS)
+
+rebuild: clean all
+
