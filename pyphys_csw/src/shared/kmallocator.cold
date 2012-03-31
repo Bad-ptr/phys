@@ -1,0 +1,160 @@
+
+#include "kmallocator.h"
+
+kmemblob * kmallocator_mbAlloc( kmallocator * _mallocator );
+
+
+kmallocator * kmallocator_init( kmallocator * _mallocator, unsigned int _msize, unsigned int _minblob, unsigned int _nfk )
+{
+	if ( !_mallocator ){
+
+		_mallocator = malloc( sizeof( kmallocator ) );
+		if ( !_mallocator )
+			return NULL;
+	}
+
+	_mallocator->msize = _msize;
+	_mallocator->minblob = _minblob;
+	_mallocator->nfk = _nfk;
+	_mallocator->nf = 0;
+	_mallocator->mbs.prev = _mallocator->mbs.next = NULL;
+
+	kmallocator_mbAlloc( _mallocator );
+
+	return _mallocator;
+};
+
+
+kmemblob * kmallocator_mbKillf( kmemblob * _mblob )
+{
+//	if( !_mallocator || !_mblob ){ return NULL; }
+
+	kmemblob * ret = (kmemblob *)ksdllitem_rm( &_mblob->p, ktrue );
+
+	free( _mblob );
+
+	return ret;
+};
+
+kmemblob * kmallocator_mbKillb( kmemblob * _mblob )
+{
+//	if( !_mallocator || !_mblob ){ return NULL; }
+
+	kmemblob * ret = (kmemblob *)ksdllitem_rm( &_mblob->p, kfalse );
+
+	free( _mblob );
+
+	return ret;
+};
+
+void kmallocator_destroy( kmallocator * _mallocator )
+{
+	if( !_mallocator ){ return; }
+	
+	if( _mallocator->mbs.prev )
+		while( kmallocator_mbKillb( (kmemblob *)_mallocator->mbs.prev ) ){;}
+		//while( ksdllitem_rm( _mallocator->mbs.prev, kfalse ) ){;}
+
+	if( _mallocator->mbs.next )
+		while( kmallocator_mbKillf( (kmemblob *)_mallocator->mbs.next ) ){;}
+		//while( ksdllitem_rm( _mallocator->mbs.next, ktrue ) ){;}
+	free( _mallocator );
+
+};
+
+
+kmemblob * kmallocator_mbAlloc( kmallocator * _mallocator )
+{
+	//if( !_mallocator ){ return NULL; }
+
+	size_t totalsize = sizeof( kmemblob ) + ( sizeof( kmemblock ) + _mallocator->msize ) * _mallocator->minblob;
+	kmemblob * nblb = malloc( totalsize ); //allocate full size for memblob and all memblocks it contain
+													  //and get pointer to memblob
+	ksdllitem_ins( &_mallocator->mbs, &nblb->p, ktrue ); //adding our just allocated memblob to kmallocator's list
+	nblb->nfull = 0;
+	nblb->fmb = (ksllitem *)(nblb + 1);         //( now it's first memblock and it begins just after memblob)
+	kmemblock * cblk = (kmemblock *)nblb->fmb;//current memblock
+
+	unsigned int i;
+	kmemblock * nblk;//next memblock
+	for( i = 1u; i < _mallocator->minblob; i++)
+	{
+		cblk->parent = nblb;
+		nblk = (kmemblock *)( ((void *)(cblk + 1)) + _mallocator->msize );
+		cblk = (kmemblock *)ksllitem_ins( NULL, &cblk->p, &nblk->p, ktrue );
+	}
+	cblk->parent = nblb;
+	cblk->p.next = NULL;
+
+	_mallocator->nf += 1;
+
+	return nblb;
+
+};
+
+kmemblob * kmallocator_mbFree( kmallocator * _mallocator, kmemblob * _mblob )
+{
+
+//	_mblob->next = _mallocator->freebbs;
+	
+//	_mallocator->freebbs = _mblob;
+
+	return NULL;
+
+};
+
+
+void * kmallocator_malloc( kmallocator * _mallocator )
+{//what a mess :o(
+//	if ( !_mallocator ){ return NULL; }
+
+	kmemblob * fmemblob = (kmemblob *)_mallocator->mbs.next; //pointer to free memblob or NULL?
+	if( !fmemblob )
+		fmemblob = kmallocator_mbAlloc( _mallocator );// if no free memblobs left allocate one, not a NULL ;)
+
+	kmemblock * fmemblock = (kmemblock *)fmemblob->fmb;
+	void * tret = (void *)(fmemblock + 1);
+
+	fmemblob->fmb = ksllitem_next( &fmemblock->p );
+	fmemblob->nfull += 1;
+
+	if( fmemblob->nfull == _mallocator->minblob )
+	{
+		ksdllitem_mv( &_mallocator->mbs, &fmemblob->p, kfalse );
+		_mallocator->nf -= 1;
+	}
+	
+	return tret;
+};
+
+
+void * kmallocator_mfree( kmallocator * _mallocator, void * _m )
+{
+//	if( !_mallocator || !_m ){ return NULL; }
+
+	kmemblock * kmb = (kmemblock *)(_m - sizeof( kmemblock ));
+	kmemblob * pmblob = kmb->parent;
+
+	pmblob->nfull -= 1;
+	if( 0 == pmblob->nfull )
+	{
+
+		if( _mallocator->nf < _mallocator->nfk )
+		{
+
+			ksdllitem_mv( &_mallocator->mbs, &pmblob->p, ktrue );
+		}
+		else
+            return kmallocator_mbKillf( pmblob );
+
+	}
+	else if( pmblob->nfull == (_mallocator->minblob -1) ){
+
+		ksdllitem_mv( &_mallocator->mbs, &pmblob->p, ktrue );
+	}
+
+	pmblob->fmb = ksllitem_ins( NULL, pmblob->fmb, &kmb->p, kfalse );
+
+	return kmb;
+};
+

@@ -1,0 +1,48 @@
+#ifndef K_MEMALLOC_H
+#define K_MEMALLOC_H
+
+
+#include "shared.h"
+#include "ksllist.h"
+
+
+typedef struct kmemblob_s
+{
+	ksdllitem p; //for positioning in mallocator's list of memblobs
+	ksllitem * fmb; //free memblocks
+	unsigned int nfull; //number of filled memblocks
+
+}kmemblob;
+
+typedef struct kmemblock_s
+{
+	ksllitem p; //next
+	kmemblob * parent; //parent memblob
+
+}kmemblock;
+
+typedef struct kmallocator_s
+{
+    ksdllitem mbs; //[double linked list of MeMBloBS] .prev for filled up blocks, .next for free blocks
+	unsigned int msize, //size of data element we need to find place in memory for
+				 minblob, //how many sizes(of data element we need to find place for) one block contain
+				 nf, //number of currently free memblobs
+				 nfk; //number of free memblobs to keep for possible future reuse
+
+}kmallocator;
+
+
+kmallocator * kmallocator_init( kmallocator * _mallocator, unsigned int _msize,
+		unsigned int _minblob, unsigned int _nfk );
+
+void kmallocator_destroy( kmallocator * _mallocator );
+//kmemblob * kmallocator_mbAlloc( kmallocator * _mallocator );
+//kmemblob * kmallocator_mbFree( kmallocator * _mallocator, kmemblob * _mblob );
+//kmemblob * kmallocator_mbKillf( kmemblob * _mblob );
+//kmemblob * kmallocator_mbKillb( kmemblob * _mblob );
+void * kmallocator_malloc( kmallocator * _mallocator );
+void * kmallocator_mfree( kmallocator * _mallocator, void * _m );
+
+
+#endif
+
